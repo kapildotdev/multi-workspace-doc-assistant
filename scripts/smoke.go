@@ -112,6 +112,8 @@ func main() {
 	ok("refusal detected (gemini phrasing)", web.IsRefusal("I do not know the answer as there is no mention in the provided context."))
 	ok("refusal detected (stub phrasing)", web.IsRefusal("I don't know — this workspace's documents don't contain the answer."))
 	ok("grounded answer is not a refusal", !web.IsRefusal("The Helios launch token is ZX-99 [workspace-a.txt §0]."))
+	ok("refusal prose stripped of inline cites", web.StripCitations("I do not know as it is not mentioned in the provided context [workspace-b.txt §0].") == "I do not know as it is not mentioned in the provided context.")
+	ok("strip removes cites wherever called (handler calls it for refusals only)", web.StripCitations("Token is ZX-99 [workspace-a.txt §0].") == "Token is ZX-99.")
 	if fail > 0 {
 		os.Exit(1)
 	}

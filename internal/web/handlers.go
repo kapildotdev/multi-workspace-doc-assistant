@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -464,7 +465,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	if IsRefusal(finalText) {
 		// The model's own honest refusal is authoritative: a "don't know"
-		// must never carry citations nor count as a retrieval hit.
+		// must never carry citations nor count as a retrieval hit — including
+		// citations the model baked into its own prose.
+		finalText = StripCitations(finalText)
 		cites = ""
 		hit = false
 	}
@@ -589,6 +592,17 @@ func IsRefusal(s string) bool {
 		}
 	}
 	return false
+}
+
+// StripCitations removes "[file §N]" markers from refusal text.
+var citeRe = regexp.MustCompile(`\[[^\[\]]+§\d+\]`)
+
+func StripCitations(s string) string {
+	out := citeRe.ReplaceAllString(s, "")
+	out = strings.Join(strings.Fields(out), " ")
+	out = strings.ReplaceAll(out, " .", ".")
+	out = strings.ReplaceAll(out, " ,", ",")
+	return strings.TrimSpace(out)
 }
 
 func truncate(s string, n int) string {
