@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: workspace-assistant
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_EMBED_MODEL
+        value: text-embedding-004
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
