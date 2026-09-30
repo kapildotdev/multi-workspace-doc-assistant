@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -336,6 +337,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	qemb, err := s.LLM.Embed(ctx, q)
 	if err != nil {
+		log.Printf("embed failed (question saved, ask to retry): %v", err)
 		_, _ = s.Store.AddMessage(ctx, store.Message{WorkspaceID: active.ID, Role: "assistant",
 			Content: "Retrieval failed temporarily — your question is saved, please retry.", Hit: false, LatencyMs: time.Since(t0).Milliseconds()})
 		http.Redirect(w, r, "/app", http.StatusSeeOther)
@@ -368,6 +370,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.LLM.Chat(ctx, q, contextBlock, hb.String())
 	if err != nil {
+		log.Printf("chat failed (question saved, ask to retry): %v", err)
 		_, _ = s.Store.AddMessage(ctx, store.Message{WorkspaceID: active.ID, Role: "assistant",
 			Content: "The model call failed — your question is saved, please retry.", Hit: hit, LatencyMs: time.Since(t0).Milliseconds()})
 		http.Redirect(w, r, "/app", http.StatusSeeOther)
