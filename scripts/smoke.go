@@ -80,7 +80,8 @@ func main() {
 	ok("unknown tool delete_everything not allowlisted", !allowed["delete_everything"])
 
 	// honest refusal: empty workspace
-	wC, _ := st.CreateWorkspace(ctx, u.ID, "Empty")	qe2, _ := lc.Embed(ctx, "totally unrelated xyzzy question")
+	wC, _ := st.CreateWorkspace(ctx, u.ID, "Empty")
+	qe2, _ := lc.Embed(ctx, "totally unrelated xyzzy question")
 	hitsC, _ := st.SearchChunks(ctx, wC.ID, qe2, 5)
 	ok("empty workspace returns no chunks", len(hitsC) == 0)
 	res := lc.Chat
