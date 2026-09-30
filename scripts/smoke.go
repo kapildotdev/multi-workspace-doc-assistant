@@ -10,6 +10,7 @@ import (
 	"workspace-assistant/internal/rag"
 	"workspace-assistant/internal/store"
 	"workspace-assistant/internal/tools"
+	"workspace-assistant/internal/web"
 )
 
 func main() {
@@ -107,6 +108,10 @@ func main() {
 	errSample := fmt.Errorf(`chat 404: {... "message": "This model models/gemini-2.5-flash-lite is no longer available to new users. Please update your code to use models/gemini-3.5-flash-lite for the latest features."}`)
 	ok("suggested-model parsing follows API replacement", llm.SuggestedModel(errSample) == "gemini-3.5-flash-lite")
 
+	// refusals must never carry citations: detection drives cites="" + hit=false
+	ok("refusal detected (gemini phrasing)", web.IsRefusal("I do not know the answer as there is no mention in the provided context."))
+	ok("refusal detected (stub phrasing)", web.IsRefusal("I don't know — this workspace's documents don't contain the answer."))
+	ok("grounded answer is not a refusal", !web.IsRefusal("The Helios launch token is ZX-99 [workspace-a.txt §0]."))
 	if fail > 0 {
 		os.Exit(1)
 	}

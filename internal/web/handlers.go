@@ -462,6 +462,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			cites += fmt.Sprintf("[%s §%d]", fnames[i], idx[i])
 		}
 	}
+	if IsRefusal(finalText) {
+		// The model's own honest refusal is authoritative: a "don't know"
+		// must never carry citations nor count as a retrieval hit.
+		cites = ""
+		hit = false
+	}
 	_, _ = s.Store.AddMessage(ctx, store.Message{
 		WorkspaceID: active.ID, Role: "assistant", Content: finalText, Citations: cites,
 		LatencyMs: time.Since(t0).Milliseconds(), Tokens: res.Tokens, Hit: hit,
@@ -567,6 +573,22 @@ func synthesizeStub(q, contextBlock string, toolNotes, results []string) string 
 	}
 	_ = q
 	return b.String()
+}
+
+// IsRefusal reports whether the answer text is an honest "don't know".
+func IsRefusal(s string) bool {
+	l := strings.ToLower(s)
+	for _, p := range []string{
+		"don't know", "do not know", "dont know",
+		"no mention", "not mention", "does not contain", "don't contain",
+		"not in the provided context", "not contain the answer",
+		"no information", "cannot answer", "can't answer",
+	} {
+		if strings.Contains(l, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncate(s string, n int) string {
