@@ -35,7 +35,13 @@ func (c *Client) Embed(ctx context.Context, text string) ([]float32, error) {
 		return hashEmbed(text, 768), nil
 	}
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s", c.EmbedModel, c.APIKey)
-	body, _ := json.Marshal(map[string]any{"model": "models/" + c.EmbedModel, "content": map[string]any{"parts": []any{map[string]any{"text": text}}}})
+	body, _ := json.Marshal(map[string]any{
+		"model": "models/" + c.EmbedModel,
+		"content": map[string]any{"parts": []any{map[string]any{"text": text}}},
+		// keep vectors at 768 dims to match the pgvector column; Matryoshka
+		// truncation means a longer return is still safe to cut (see below).
+		"embedContentConfig": map[string]any{"outputDimensionality": 768},
+	})
 	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)

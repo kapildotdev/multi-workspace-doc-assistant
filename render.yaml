@@ -12,6 +12,6 @@ services:
       - key: GEMINI_CHAT_MODEL
         value: gemini-2.0-flash
       - key: GEMINI_EMBED_MODEL
-        value: text-embedding-004
+        value: gemini-embedding-001
       - key: DISCORD_WEBHOOK_URL
         sync: false

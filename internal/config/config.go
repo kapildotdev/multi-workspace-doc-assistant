@@ -30,7 +30,7 @@ func Load() Config {
 		c.ChatModel = "gemini-2.0-flash"
 	}
 	if c.EmbedModel == "" {
-		c.EmbedModel = "text-embedding-004"
+		c.EmbedModel = "gemini-embedding-001" // 768-dim via outputDimensionality below
 	}
 	if c.Port == "" {
 		c.Port = "8080"
