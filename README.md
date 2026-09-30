@@ -1,5 +1,7 @@
 # Multi-Workspace Document Assistant (RAG + Tool Calling)
 
+**Live: https://multi-workspace-doc-assistant-yqgr.onrender.com/** (Render free tier — first load after idle can take ~30–50s to wake; data persists in Supabase.)
+
 Go monolith (chi + html/template). One shared pgvector table for all workspaces, strict per-workspace retrieval, grounded chat with citations + honest refusal, two tools (`save_task`, `send_summary`), dashboard behind login with workspace switcher, docs, chat history, tool-call log, and a retrieval-debug view.
 
 ## Run locally
