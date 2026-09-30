@@ -166,23 +166,64 @@ func (c *Client) Chat(ctx context.Context, question, contextBlock string, histor
 		return c.stubChat(question, contextBlock), nil
 	}
 	models := []string{c.ChatModel}
-	for _, fb := range []string{"gemini-2.5-flash", "gemini-2.5-flash-lite"} {
+	for _, fb := range []string{"gemini-3.5-flash", "gemini-3.5-flash-lite"} {
 		if fb != c.ChatModel {
 			models = append(models, fb)
 		}
 	}
+	tried := map[string]bool{}
 	var lastErr error
-	for _, m := range models {
-		res, retryable, err := c.chatOnce(ctx, m, question, contextBlock, history)
+	try := func(m string) (res ChatResult, ok, stop bool) {
+		if tried[m] {
+			return ChatResult{}, false, false
+		}
+		tried[m] = true
+		r, retryable, err := c.chatOnce(ctx, m, question, contextBlock, history)
 		if err == nil {
-			return res, nil
+			return r, true, false
 		}
 		lastErr = err
-		if !retryable {
-			return ChatResult{}, err
+		return ChatResult{}, false, !retryable
+	}
+	for _, m := range models {
+		res, ok, stop := try(m)
+		if ok {
+			return res, nil
+		}
+		if stop {
+			return ChatResult{}, lastErr
+		}
+	}
+	// The API names its replacement on retirement 404s
+	// ("...update your code to use models/gemini-3.5-flash-lite..."): follow it once.
+	if sug := SuggestedModel(lastErr); sug != "" {
+		if res, ok, _ := try(sug); ok {
+			return res, nil
 		}
 	}
 	return ChatResult{}, lastErr
+}
+
+// SuggestedModel extracts "use models/X" from a retirement 404.
+func SuggestedModel(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	i := strings.Index(msg, "use models/")
+	if i < 0 {
+		return ""
+	}
+	rest := msg[i+len("use models/"):]
+	end := 0
+	for end < len(rest) && (isModelChar(rest[end])) {
+		end++
+	}
+	return rest[:end]
+}
+
+func isModelChar(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '.' || b == '-' || b == '_'
 }
 
 func (c *Client) chatOnce(ctx context.Context, model, question, contextBlock string, history string) (ChatResult, bool, error) {

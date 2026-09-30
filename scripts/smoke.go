@@ -103,6 +103,10 @@ func main() {
 	}
 	ok("empty shell deleted so re-upload heals", gone)
 
+	// retirement 404s name their replacement: client must follow "use models/X"
+	errSample := fmt.Errorf(`chat 404: {... "message": "This model models/gemini-2.5-flash-lite is no longer available to new users. Please update your code to use models/gemini-3.5-flash-lite for the latest features."}`)
+	ok("suggested-model parsing follows API replacement", llm.SuggestedModel(errSample) == "gemini-3.5-flash-lite")
+
 	if fail > 0 {
 		os.Exit(1)
 	}
