@@ -451,14 +451,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		finalText = "I don't know — this workspace's documents don't contain the answer."
 	}
 	cites := ""
-	for i := range fnames {
-		if i >= 4 {
-			break
+	if hit {
+		for i := range fnames {
+			if i >= 4 {
+				break
+			}
+			if cites != "" {
+				cites += ", "
+			}
+			cites += fmt.Sprintf("[%s §%d]", fnames[i], idx[i])
 		}
-		if cites != "" {
-			cites += ", "
-		}
-		cites += fmt.Sprintf("[%s §%d]", fnames[i], idx[i])
 	}
 	_, _ = s.Store.AddMessage(ctx, store.Message{
 		WorkspaceID: active.ID, Role: "assistant", Content: finalText, Citations: cites,
