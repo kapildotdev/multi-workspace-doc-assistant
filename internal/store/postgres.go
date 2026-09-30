@@ -163,6 +163,21 @@ func (s *PostgresStore) ListDocuments(ctx context.Context, wsID string) ([]*Docu
 	return out, rows.Err()
 }
 
+func (s *PostgresStore) CountChunksForDoc(ctx context.Context, docID string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `select count(*) from chunks where document_id=$1`, docID).Scan(&n)
+	return n, err
+}
+
+func (s *PostgresStore) DeleteDocument(ctx context.Context, docID string) error {
+	_, err := s.pool.Exec(ctx, `delete from chunks where document_id=$1`, docID)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `delete from documents where id=$1`, docID)
+	return err
+}
+
 func (s *PostgresStore) AddChunks(ctx context.Context, cs []Chunk) error {
 	batch := &pgx.Batch{}
 	for _, c := range cs {

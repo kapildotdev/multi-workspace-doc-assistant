@@ -235,49 +235,98 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		// also support single "doc"
 		files = r.MultipartForm.File["doc"]
 	}
-	count := 0
+	count, skipped, failed := 0, 0, 0
+	existingDocs, _ := s.Store.ListDocuments(r.Context(), active.ID)
+	findBySHA := func(sha string) *store.Document {
+		for _, d := range existingDocs {
+			if d.SHA256 == sha {
+				return d
+			}
+		}
+		return nil
+	}
+	// healable duplicate: a doc row whose chunks never embedded (e.g. past API
+	// outage) is deleted so the re-upload actually ingests instead of skipping.
+	ensureFresh := func(sha string) bool {
+		if d := findBySHA(sha); d != nil {
+			if n, _ := s.Store.CountChunksForDoc(r.Context(), d.ID); n > 0 {
+				skipped++
+				return false // true idempotent duplicate
+			}
+			_ = s.Store.DeleteDocument(r.Context(), d.ID)
+		}
+		return true
+	}
+	ingestChunks := func(filename, sha string, texts []string) {
+		var cs []store.Chunk
+		docID := store.NewID()
+		for i, ch := range texts {
+			emb, err := s.LLM.Embed(r.Context(), ch)
+			if err != nil {
+				log.Printf("upload embed failed for %s chunk %d: %v", filename, i, err)
+				continue
+			}
+			cs = append(cs, store.Chunk{ID: store.NewID(), WorkspaceID: active.ID, DocumentID: docID, Filename: filename, Index: i, Content: ch, Embedding: emb})
+		}
+		if len(cs) == 0 {
+			failed++
+			return
+		}
+		if _, err := s.Store.CreateDocument(r.Context(), active.ID, filename, sha, len(cs)); err != nil {
+			// raced duplicate: still try to store chunks under existing doc? skip.
+			failed++
+			return
+		}
+		// point chunks at the real doc id: look it up (CreateDocument made its own id)
+		if d := func() *store.Document {
+			docs, _ := s.Store.ListDocuments(r.Context(), active.ID)
+			for _, x := range docs {
+				if x.SHA256 == sha {
+					return x
+				}
+			}
+			return nil
+		}(); d != nil {
+			for i := range cs {
+				cs[i].DocumentID = d.ID
+			}
+		}
+		if err := s.Store.AddChunks(r.Context(), cs); err != nil {
+			log.Printf("upload AddChunks failed for %s: %v", filename, err)
+			failed++
+			return
+		}
+		count++
+	}
 	for _, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
+			failed++
 			continue
 		}
 		raw, err := io.ReadAll(io.LimitReader(f, 5<<20))
 		f.Close()
 		if err != nil {
+			failed++
 			continue
 		}
 		text := string(raw)
 		// naive PDF guard: reject binary PDFs with clear message
 		if strings.HasSuffix(strings.ToLower(fh.Filename), ".pdf") && strings.Contains(text, "%PDF") && len(extractText(text)) < 50 {
+			failed++
 			continue
 		}
-		if h := sha256.Sum256(raw); true {
-			sha := hex.EncodeToString(h[:])
-			if s.Store.DocExists(r.Context(), active.ID, sha) {
-				continue // idempotent: skip duplicates
-			}
-			chunks := rag.ChunkText(extractText(text), 800, 150)
-			if len(chunks) == 0 {
-				continue
-			}
-			doc, err := s.Store.CreateDocument(r.Context(), active.ID, fh.Filename, sha, len(chunks))
-			if err != nil {
-				continue
-			}
-			var cs []store.Chunk
-			for i, ch := range chunks {
-				emb, err := s.LLM.Embed(r.Context(), ch)
-				if err != nil {
-					continue
-				}
-				cs = append(cs, store.Chunk{WorkspaceID: active.ID, DocumentID: doc.ID, Filename: fh.Filename, Index: i, Content: ch, Embedding: emb})
-			}
-			if len(cs) == 0 {
-				continue
-			}
-			_ = s.Store.AddChunks(r.Context(), cs)
-			count++
+		h := sha256.Sum256(raw)
+		sha := hex.EncodeToString(h[:])
+		if !ensureFresh(sha) {
+			continue
 		}
+		chunks := rag.ChunkText(extractText(text), 800, 150)
+		if len(chunks) == 0 {
+			failed++
+			continue
+		}
+		ingestChunks(fh.Filename, sha, chunks)
 	}
 	// also support pasted text
 	if pasted := strings.TrimSpace(r.FormValue("pastetext")); pasted != "" {
@@ -286,24 +335,16 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			name = "pasted.txt"
 		}
 		sha := store.HashSHA(active.ID + name + pasted)
-		if !s.Store.DocExists(r.Context(), active.ID, sha) {
-			chunks := rag.ChunkText(pasted, 800, 150)
-			doc, err := s.Store.CreateDocument(r.Context(), active.ID, name, sha, len(chunks))
-			if err == nil {
-				var cs []store.Chunk
-				for i, ch := range chunks {
-					emb, err := s.LLM.Embed(r.Context(), ch)
-					if err != nil {
-						continue
-					}
-					cs = append(cs, store.Chunk{WorkspaceID: active.ID, DocumentID: doc.ID, Filename: name, Index: i, Content: ch, Embedding: emb})
-				}
-				_ = s.Store.AddChunks(r.Context(), cs)
-				count++
+		if ensureFresh(sha) {
+			if chunks := rag.ChunkText(pasted, 800, 150); len(chunks) > 0 {
+				ingestChunks(name, sha, chunks)
+			} else {
+				failed++
 			}
 		}
 	}
-	http.Redirect(w, r, "/app?n=ingested+"+itoa(count)+"+document%28s%29", http.StatusSeeOther)
+	notice := fmt.Sprintf("ingested+%d+document%%28s%%29,+skipped+%d+duplicate%%28s%%29,+failed+%d", count, skipped, failed)
+	http.Redirect(w, r, "/app?n="+notice, http.StatusSeeOther)
 }
 
 func extractText(s string) string {

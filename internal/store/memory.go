@@ -96,6 +96,8 @@ type Store interface {
 	CreateDocument(ctx context.Context, wsID, filename, sha string, nchunks int) (*Document, error)
 	DocExists(ctx context.Context, wsID, sha string) bool
 	ListDocuments(ctx context.Context, wsID string) ([]*Document, error)
+	CountChunksForDoc(ctx context.Context, docID string) (int, error)
+	DeleteDocument(ctx context.Context, docID string) error
 
 	AddChunks(ctx context.Context, chunks []Chunk) error
 	// SearchChunks MUST filter workspace_id inside the query (SQL WHERE) — never post-filter.
@@ -281,6 +283,32 @@ func (m *MemoryStore) ListDocuments(ctx context.Context, wsID string) ([]*Docume
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
+}
+
+func (m *MemoryStore) CountChunksForDoc(ctx context.Context, docID string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, c := range m.chunks {
+		if c.DocumentID == docID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *MemoryStore) DeleteDocument(ctx context.Context, docID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.docs, docID)
+	kept := m.chunks[:0]
+	for _, c := range m.chunks {
+		if c.DocumentID != docID {
+			kept = append(kept, c)
+		}
+	}
+	m.chunks = kept
+	return nil
 }
 
 func (m *MemoryStore) AddChunks(ctx context.Context, cs []Chunk) error {

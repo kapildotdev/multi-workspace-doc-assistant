@@ -80,14 +80,27 @@ func main() {
 	ok("unknown tool delete_everything not allowlisted", !allowed["delete_everything"])
 
 	// honest refusal: empty workspace
-	wC, _ := st.CreateWorkspace(ctx, u.ID, "Empty")
-	qe2, _ := lc.Embed(ctx, "totally unrelated xyzzy question")
+	wC, _ := st.CreateWorkspace(ctx, u.ID, "Empty")	qe2, _ := lc.Embed(ctx, "totally unrelated xyzzy question")
 	hitsC, _ := st.SearchChunks(ctx, wC.ID, qe2, 5)
 	ok("empty workspace returns no chunks", len(hitsC) == 0)
 	res := lc.Chat
 	_ = res
 	r, _ := lc.Chat(ctx, "what is helios?", "(no chunks)", "")
 	ok("stub says don't know on empty context", strings.Contains(strings.ToLower(r.Text), "don't know"))
+
+	// heal: empty doc shell (failed 404-era upload) is detected and removable
+	shell, _ := st.CreateDocument(ctx, wC.ID, "shell.txt", "deadbeef", 3)
+	n, _ := st.CountChunksForDoc(ctx, shell.ID)
+	ok("empty shell detected (0 chunks)", n == 0)
+	_ = st.DeleteDocument(ctx, shell.ID)
+	docs, _ := st.ListDocuments(ctx, wC.ID)
+	gone := true
+	for _, d := range docs {
+		if d.ID == shell.ID {
+			gone = false
+		}
+	}
+	ok("empty shell deleted so re-upload heals", gone)
 
 	if fail > 0 {
 		os.Exit(1)
