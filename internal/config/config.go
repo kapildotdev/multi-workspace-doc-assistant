@@ -1,6 +1,10 @@
 package config
 
-import "os"
+import (
+	"bufio"
+	"os"
+	"strings"
+)
 
 type Config struct {
 	DatabaseURL  string
@@ -13,6 +17,7 @@ type Config struct {
 }
 
 func Load() Config {
+	loadDotEnv() // local dev convenience; real deploys use actual env vars
 	c := Config{
 		DatabaseURL:  os.Getenv("DATABASE_URL"),
 		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
@@ -31,4 +36,29 @@ func Load() Config {
 		c.Port = "8080"
 	}
 	return c
+}
+
+// loadDotEnv parses a local .env (KEY=VALUE, # comments, optional quotes)
+// and sets vars that aren't already in the environment. No dependency.
+func loadDotEnv() {
+	f, err := os.Open(".env")
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if i := strings.Index(line, "="); i > 0 {
+			k := strings.TrimSpace(line[:i])
+			v := strings.TrimSpace(line[i+1:])
+			v = strings.Trim(v, `"'`)
+			if k != "" && os.Getenv(k) == "" {
+				os.Setenv(k, v)
+			}
+		}
+	}
 }
