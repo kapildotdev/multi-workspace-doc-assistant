@@ -18,7 +18,7 @@ Env vars:
 |---|---|---|
 | `DATABASE_URL` | no (falls back to memory) | Supabase Postgres connection; enables pgvector persistence |
 | `GEMINI_API_KEY` | no (falls back to stub) | AI Studio key, no card; enables real embeddings + chat + tool calling |
-| `GEMINI_CHAT_MODEL` | no, default `gemini-2.0-flash` | chat model |
+| `GEMINI_CHAT_MODEL` | no, default `gemini-3.8-flash` | chat model |
 | `GEMINI_EMBED_MODEL` | no, default `gemini-embedding-001` | 768-dim embeddings |
 | `DISCORD_WEBHOOK_URL` | no | `send_summary` target; without it the tool logs "skipped" gracefully |
 | `PORT` | no, default 8080 | listen port |

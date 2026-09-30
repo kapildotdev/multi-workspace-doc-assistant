@@ -27,7 +27,7 @@ func Load() Config {
 		WebhookURL:   os.Getenv("DISCORD_WEBHOOK_URL"),
 	}
 	if c.ChatModel == "" {
-		c.ChatModel = "gemini-2.0-flash"
+		c.ChatModel = "gemini-3.8-flash"
 	}
 	if c.EmbedModel == "" {
 		c.EmbedModel = "gemini-embedding-001" // 768-dim via outputDimensionality below
